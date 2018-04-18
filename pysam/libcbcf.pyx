@@ -1,4 +1,4 @@
-# cython: embedsignature=True
+#len cython: embedsignature=True
 # cython: profile=True
 ###############################################################################
 ###############################################################################
@@ -85,8 +85,9 @@ import os
 import sys
 
 from libc.errno  cimport errno, EPIPE
-from libc.string cimport strcmp, strpbrk, strerror
+from libc.string cimport strcmp, strpbrk, strerror, strcpy, strlen
 from libc.stdint cimport INT8_MAX, INT16_MAX, INT32_MAX
+from libc.stdio cimport puts
 
 cimport cython
 
@@ -1281,6 +1282,28 @@ cdef class VariantHeaderRecord(object):
                     return charptr_to_str(r.vals[i]) if r.vals[i] else None
         raise KeyError('cannot find metadata key')
 
+    def __setitem__(self, key, value):
+        """set attribute value"""
+        cdef bcf_hrec_t *r = self.ptr
+        cdef int i
+        cdef char* new_val
+        if r:
+            bkey = force_bytes(key)
+            for i in range(r.nkeys):
+                if r.keys[i] and r.keys[i] == bkey:
+                    # Free the old string for this value
+                    free(r.vals[i])
+
+                    # Allocate a new string on the heap, and copy the value to it
+                    # This has to be on the heap because it will be free'd later on
+                    bval = force_bytes(value)
+                    new_val = <char*> malloc((len(bval)) * sizeof(char))
+                    strcpy(new_val, bval)
+                    r.vals[i] = new_val
+                    return
+
+        raise KeyError('cannot find metadata key')
+
     def __iter__(self):
         cdef bcf_hrec_t *r = self.ptr
         if not r:
@@ -1448,7 +1471,8 @@ cdef VariantHeaderRecords makeVariantHeaderRecords(VariantHeader header):
 
 
 cdef class VariantMetadata(object):
-    """filter, info or format metadata record from a :class:`VariantHeader` object"""
+    """A wrapper around a filter, info or format metadata record (:class:`VariantHeaderRecord`),
+    accessible from a :class:`VariantHeader` object"""
     def __init__(self, *args, **kwargs):
         raise TypeError('this class cannot be instantiated from Python')
 
@@ -1457,6 +1481,10 @@ cdef class VariantMetadata(object):
         """metadata name"""
         cdef bcf_hdr_t *hdr = self.header.ptr
         return bcf_str_cache_get_charptr(hdr.id[BCF_DT_ID][self.id].key)
+
+    @name.setter
+    def name(self, value):
+        self.record['ID'] = value
 
     # Q: Should this be exposed?
     @property
@@ -1483,6 +1511,10 @@ cdef class VariantMetadata(object):
         else:
             return METADATA_LENGTHS[l]
 
+    @number.setter
+    def number(self, value):
+        self.record['Number'] = value
+
     @property
     def type(self):
         """metadata value type"""
@@ -1494,6 +1526,10 @@ cdef class VariantMetadata(object):
             return None
         return VALUE_TYPES[bcf_hdr_id2type(hdr, self.type, self.id)]
 
+    @type.setter
+    def type(self, value):
+        self.record['Type'] = value
+
     @property
     def description(self):
         """metadata description (or None if not set)"""
@@ -1501,6 +1537,10 @@ cdef class VariantMetadata(object):
         if descr:
             descr = descr.strip('"')
         return force_str(descr)
+
+    @description.setter
+    def description(self, value):
+        self.record['Description'] = value
 
     @property
     def record(self):
