@@ -1,4 +1,4 @@
-#len cython: embedsignature=True
+# cython: embedsignature=True
 # cython: profile=True
 ###############################################################################
 ###############################################################################
@@ -87,7 +87,6 @@ import sys
 from libc.errno  cimport errno, EPIPE
 from libc.string cimport strcmp, strpbrk, strerror, strcpy, strlen
 from libc.stdint cimport INT8_MAX, INT16_MAX, INT32_MAX
-from libc.stdio cimport puts
 
 cimport cython
 
